@@ -116,14 +116,20 @@ def color_peaks(data, peaks):
     #             rgba.append([0, 0, 255])
     #         else:
     #             rgba.append([255, 0, 0])
-    return [color_peak(i, peaks, length) for i in range(len(data))]
+    return [color_peak_cube_and_floor(i, peaks, length) for i in range(len(data))]
 
 
-def color_peak(i, peaks, length):
+def color_peak_cube_and_floor(i, peaks, length):
     x = int(i % length)
     y = int(i / length)
     if [x, y] in peaks:
         return [0, 0, 255]
+    elif x == 254:
+        # cube (green)
+        return [0, 255, 0]
+    elif x == 255:
+        # floor (yellow)
+        return [255, 255, 0]
     return [255, 0, 0]
 
 
@@ -154,4 +160,4 @@ if __name__ == '__main__':
     # print(len(peaks))
     color = histogram(data)
 
-    save_image(color, 'result_limit_2.png')
+    save_image(color, 'result_limit_19_with_cube_floor.png')
