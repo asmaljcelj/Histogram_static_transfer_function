@@ -3,10 +3,9 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+from matplotlib.colors import ListedColormap
 
 limit_for_peaks = 19
-colors_used = []
-
 
 class Pixel:
     def __init__(self, x, y, color, peak, grayscale):
@@ -45,16 +44,6 @@ def save_image(data, filename):
 
 
 # histogram
-def create_histogram_demo(data):
-    # demo
-    ax = plt.axes(projection='3d')
-    ranges = create_range_of_dimension(data)
-    X, Y = np.meshgrid(ranges[0], ranges[1])
-    ax.scatter3D(X, Y, data)
-    ax.view_init(0, 35)
-    plt.show()
-
-
 def find_peaks(data):
     length = get_data_length(data)
     peaks = []
@@ -120,35 +109,36 @@ def find_peaks_and_color_image(data):
 
 
 def color_peaks(data, peaks):
+    for p in peaks:
+        p.color = generate_random_color()
     for p in data:
         color_peak_cube_and_floor(p, peaks)
 
 
 def color_peak_cube_and_floor(p, peaks):
     if p.peak:
-        p.color = [0, 0, 255]
+        return
     elif p.x == 254:
         # cube (green)
         p.color = [0, 255, 0]
     elif p.x == 255:
         # floor (yellow)
         p.color = [255, 255, 0]
-    elif p.x == 0:
+    elif p.x == 0 or p.grayscale == 0:
         # air (black)
         p.color = [255, 255, 255]
     else:
         # not floor, cube or peak, interpolate
         # todo: interpolating!!!
-        p.color = [255, 0, 0]
+        # p.color = [255, 0, 0]
+        peak1, peak2 = find_closest_peaks(p, peaks)
+        cmap = create_listed_colormap(peak1[0].color, peak2[0].color)
+        percentage = calculate_percentage(peak1[1], peak2[1])
+        color = cmap(percentage)
+        p.color = [int(color[0]), int(color[1]), int(color[2])]
 
 
 # utility functions
-def create_range_of_dimension(data):
-    # assuming source image is squared (equal width and height)
-    length = get_data_length(data)
-    return range(length), range(length)
-
-
 def get_data_length(data):
     return int(math.sqrt(len(data)))
 
@@ -156,6 +146,36 @@ def get_data_length(data):
 def get_data_at_index(data, x, y):
     length = get_data_length(data)
     return data[x + y * length]
+
+
+def create_listed_colormap(color1, color2):
+    return ListedColormap([color1, color2])
+
+
+def distance_between_pixels(p1, p2):
+    return abs(p1.x - p2.x) + abs(p1.y - p2.y)
+
+
+def find_closest_peaks(pixel, peaks):
+    min1 = ['', -1]
+    min2 = ['', -1]
+    for p in peaks:
+        distance = distance_between_pixels(pixel, p)
+        if distance < min1[1] or min1[1] == -1:
+            min2 = min1
+            min1 = [p, distance]
+        elif distance < min2[1] or min2[1] == -1:
+            min2 = [p, distance]
+    return min1, min2
+
+
+def generate_random_color():
+    return list(np.random.choice(range(256), size=3))
+
+
+def calculate_percentage(distance1, distance2):
+    total_distance = distance1 + distance2
+    return distance1 / total_distance
 
 
 if __name__ == '__main__':
