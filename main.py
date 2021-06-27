@@ -1,11 +1,13 @@
 import math
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from matplotlib.colors import ListedColormap
+from matplotlib.cm import get_cmap
 
 limit_for_peaks = 19
+
 
 class Pixel:
     def __init__(self, x, y, color, peak, grayscale):
@@ -37,7 +39,7 @@ def open_image_and_prepare_pixels(src):
 
 
 def save_image(data, filename):
-    im = Image.new(mode="RGB", size=(256, 256))
+    im = Image.new(mode="RGBA", size=(256, 256))
     for p in data:
         im.putpixel((p.x, p.y), tuple(p.color))
     im.save(filename)
@@ -109,33 +111,29 @@ def find_peaks_and_color_image(data):
 
 
 def color_peaks(data, peaks):
-    for p in peaks:
-        p.color = generate_random_color()
+    color_map, interval = generate_color_map_and_interval_length('Blues', len(peaks), 0.1, 0.9)
+    for i, p in enumerate(peaks):
+        p.color = generate_peak_color(color_map, interval, 0.1, i)
     for p in data:
-        color_peak_cube_and_floor(p, peaks)
+        color_pixels(p, peaks)
 
 
-def color_peak_cube_and_floor(p, peaks):
+def color_pixels(p, peaks):
     if p.peak:
         return
     elif p.x == 254:
         # cube (green)
-        p.color = [0, 255, 0]
+        p.color = [0, 255, 0, 255]
     elif p.x == 255:
         # floor (yellow)
-        p.color = [255, 255, 0]
+        p.color = [255, 255, 0, 255]
     elif p.x == 0 or p.grayscale == 0:
         # air (black)
-        p.color = [255, 255, 255]
+        p.color = [255, 255, 255, 0]
     else:
         # not floor, cube or peak, interpolate
-        # todo: interpolating!!!
-        # p.color = [255, 0, 0]
-        peak1, peak2 = find_closest_peaks(p, peaks)
-        cmap = create_listed_colormap(peak1[0].color, peak2[0].color)
-        percentage = calculate_percentage(peak1[1], peak2[1])
-        color = cmap(percentage)
-        p.color = [int(color[0]), int(color[1]), int(color[2])]
+        color = get_color_ratios(p, peaks)
+        p.color = color
 
 
 # utility functions
@@ -148,29 +146,66 @@ def get_data_at_index(data, x, y):
     return data[x + y * length]
 
 
-def create_listed_colormap(color1, color2):
-    return ListedColormap([color1, color2])
+# generate color for peak
+def generate_peak_color(color_map, interval, begin, i):
+    position_in_interval = random.random() * interval
+    position = i * interval + position_in_interval
+    color = color_map(position + begin)
+    return [int(color[0] * 255), int(color[1] * 255), int(color[2] * 255), 255]
 
 
-def distance_between_pixels(p1, p2):
-    return abs(p1.x - p2.x) + abs(p1.y - p2.y)
+# generate color map and interval length on custom interval from 0 to 1
+def generate_color_map_and_interval_length(color_map_name, number_of_peaks, begin, end):
+    cmap = get_cmap(color_map_name)
+    interval = (end - begin) / number_of_peaks
+    return cmap, interval
 
 
-def find_closest_peaks(pixel, peaks):
-    min1 = ['', -1]
-    min2 = ['', -1]
-    for p in peaks:
-        distance = distance_between_pixels(pixel, p)
-        if distance < min1[1] or min1[1] == -1:
-            min2 = min1
-            min1 = [p, distance]
-        elif distance < min2[1] or min2[1] == -1:
-            min2 = [p, distance]
-    return min1, min2
+# multicolor gradient
+def get_color_ratios(point, peaks):
+    color_ratios = [1] * len(peaks)
+    for index1, peak1 in enumerate(peaks):
+        for index2, peak2 in enumerate(peaks):
+            if index1 == index2:
+                continue
+            d = projection_distance(peak1, peak2, point)
+            color_ratios[index1] *= limit(d)
+    total_ratios_sum = 0
+    for ratio in color_ratios:
+        total_ratios_sum += ratio
+    for ratio in color_ratios:
+        ratio /= total_ratios_sum
+    color = get_color_mix(peaks, color_ratios)
+    return color
 
 
-def generate_random_color():
-    return list(np.random.choice(range(256), size=3))
+def get_color_mix(peaks, color_ratios):
+    r = 0
+    g = 0
+    b = 0
+    for index, peak in enumerate(peaks):
+        r += peak.color[0] * color_ratios[index]
+        g += peak.color[1] * color_ratios[index]
+        b += peak.color[2] * color_ratios[index]
+    return [int(r), int(g), int(b)]
+
+
+def projection_distance(peak1, peak2, point):
+    k2 = peak2.x * peak2.x - peak2.x * peak1.x + peak2.y * peak2.y - peak2.y * peak1.y
+    k1 = peak1.x * peak1.x - peak2.x * peak1.x + peak1.y * peak1.y - peak2.y * peak1.y
+    ab2 = (peak1.x - peak2.x) * (peak1.x - peak2.x) + (peak1.y - peak2.y) * (peak1.y - peak2.y)
+    kcom = point.x * (peak1.x - peak2.x) + point.y * (peak1.y - peak2.y)
+    d1 = (k1 - kcom) / ab2
+    d2 = (k2 + kcom) / ab2
+    return d2
+
+
+def limit(value):
+    if value < 0:
+        return 0
+    if value > 1:
+        return 1
+    return value
 
 
 def calculate_percentage(distance1, distance2):
@@ -185,4 +220,4 @@ if __name__ == '__main__':
     # find peaks of data and color every pixel in accordance
     find_peaks_and_color_image(data)
     # save the colors of pixel in a new image
-    save_image(data, 'object_test.png')
+    save_image(data, 'object_test_alpha_with_shades_interpolate_test.png')
